@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{
+  --bg:#f6f9ff;
+  --panel:#ffffff;
+  --ink:#0b2447;
+  --muted:#58779f;
+}
+
+html,body,#root{height:100%}
+body{ @apply bg-[var(--bg)] text-[var(--ink)] font-sans antialiased; }
+.page-wrap{ @apply min-h-screen; }
+.panel{ @apply bg-white rounded-2xl shadow-md; }
