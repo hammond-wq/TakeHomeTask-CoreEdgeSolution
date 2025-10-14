@@ -1,0 +1,20 @@
+[project]
+name = "ai-call-agent-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi[all]",
+  "uvicorn[standard]",
+  "httpx",
+  "pydantic-settings>=2",
+  "sqlalchemy[asyncio]",
+  "psycopg[binary]",
+  "alembic",
+  "structlog",
+  "python-json-logger",
+  "tenacity",
+  "orjson"
+]
+
+[tool.ruff]
+line-length = 100
