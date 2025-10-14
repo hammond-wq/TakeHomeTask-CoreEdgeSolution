@@ -1,10 +1,11 @@
-# app/services/supabase.py
 from __future__ import annotations
-import os, httpx
+import httpx
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+# Hardcoded values (replace these with actual values)
+SUPABASE_URL = "https://tdqfcycljpezeygmoxch.supabase.co"
+SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkcWZjeWNsanBlemV5Z21veGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0NDUzNzcsImV4cCI6MjA3NjAyMTM3N30.2zJPoU-TTt_ft_EFUfeqvJ_QY1bNoo_bxMzCqgGQuDk"
 
+# Check if the variables are set correctly
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
     raise RuntimeError("Set SUPABASE_URL and SUPABASE_SERVICE_KEY")
 
