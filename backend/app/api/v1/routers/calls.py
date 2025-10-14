@@ -5,9 +5,9 @@ from pydantic import BaseModel
 import os, httpx, time
 from app.services.supabase import SupabaseClient
 
-RETELL_API_KEY = os.getenv("RETELL_API_KEY")
-RETELL_BASE_URL = os.getenv("RETELL_BASE_URL", "https://api.retellai.com")
-RETELL_AGENT_ID = os.getenv("RETELL_AGENT_ID")
+RETELL_API_KEY = "key_999b02121954289e1f248d730285"
+RETELL_BASE_URL = "https://api.retellai.com"
+RETELL_AGENT_ID = "agent_9cdfafda6777ef1353256d0da2"
 RETELL_AGENT_VERSION = int(os.getenv("RETELL_AGENT_VERSION", "1"))
 
 if not RETELL_API_KEY or not RETELL_AGENT_ID:
