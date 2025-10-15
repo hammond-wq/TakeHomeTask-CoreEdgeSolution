@@ -1,4 +1,3 @@
-// src/assets/components/CallTrigger/CallTrigger.tsx
 import React, { useMemo, useState } from "react";
 import { startWebCall } from "../../services/api";
 import WebCallPanel from "./WebCallPanel";
@@ -20,7 +19,7 @@ type CallTriggerProps = {
   disabled?: boolean;
 };
 
-const phoneRegex = /^\+?[1-9]\d{7,14}$/; // optional for web calls
+const phoneRegex = /^\+?[1-9]\d{7,14}$/; 
 
 const CallTrigger: React.FC<CallTriggerProps> = ({ onTrigger, disabled }) => {
   const [driverName, setDriverName] = useState("");
@@ -35,7 +34,7 @@ const CallTrigger: React.FC<CallTriggerProps> = ({ onTrigger, disabled }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Shown after backend returns tokens
+
   const [webCall, setWebCall] = useState<{ callId: string; accessToken: string } | null>(null);
 
   const errors = useMemo(() => {
@@ -58,7 +57,7 @@ const CallTrigger: React.FC<CallTriggerProps> = ({ onTrigger, disabled }) => {
     try {
       setSubmitting(true);
 
-      // 1) Ask backend to create a WEB call (no phone needed)
+      
       const resp = await startWebCall({
         driver_name: driverName.trim(),
         load_number: loadNumber.trim(),
@@ -68,7 +67,7 @@ const CallTrigger: React.FC<CallTriggerProps> = ({ onTrigger, disabled }) => {
       setWebCall({ callId: call_id, accessToken: access_token });
       setSuccessMsg("Web call registered. Click 'Join Call' to connect.");
 
-      // Optional hook for analytics/side-effects
+      
       if (onTrigger) {
         await onTrigger({
           driverName: driverName.trim(),
@@ -217,7 +216,7 @@ const CallTrigger: React.FC<CallTriggerProps> = ({ onTrigger, disabled }) => {
           )}
         </form>
 
-        {/* Appears after backend returns call_id + access_token */}
+       
         {webCall && (
           <div className="px-6 pb-6">
             <WebCallPanel callId={webCall.callId} accessToken={webCall.accessToken} />
