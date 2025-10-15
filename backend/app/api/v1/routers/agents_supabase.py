@@ -12,7 +12,7 @@ class AgentIn(BaseModel):
     active: bool = True
     system_prompt: Optional[str] = None
     emergency_triggers: List[str] = Field(default_factory=list)
-    behavior: Dict[str, Any] = Field(default_factory=dict)  # {backchanneling, fillerWords, interruptionSensitivity, speakingRate, voicePreset}
+    behavior: Dict[str, Any] = Field(default_factory=dict)  
     voice_preset: Optional[str] = None
 
 @router.get("")

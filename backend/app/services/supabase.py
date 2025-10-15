@@ -12,7 +12,7 @@ class SupabaseClient:
             "Authorization": f"Bearer {settings.supabase_service_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
-            # return inserted/updated rows so we can debug easily
+            
             "Prefer": "return=representation",
         }
 

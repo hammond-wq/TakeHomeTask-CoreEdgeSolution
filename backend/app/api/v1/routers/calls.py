@@ -26,10 +26,10 @@ CREATE_PHONE_CALL_URL = f"{RETELL_BASE}/v2/create-phone-call"
 
 class StartCallIn(BaseModel):
     driver_name: str
-    driver_phone: str | None = None  # optional for web
+    driver_phone: str | None = None  
     load_number: str
-    call_type: str = "web"           # "web" | "phone"
-    from_number: str | None = None   # required if phone
+    call_type: str = "web"           
+    from_number: str | None = None   
 
 
 def retell_headers() -> dict:
@@ -45,8 +45,8 @@ async def create_supabase_calllog(
     driver_name: str | None,
     driver_phone: str | None,
 ) -> None:
-    agent_db_id = await AgentsRepo.ensure_agent_id()             # must exist
-    driver_db_id = await DriversRepo.ensure_driver_id(driver_name, driver_phone)  # must exist
+    agent_db_id = await AgentsRepo.ensure_agent_id()             
+    driver_db_id = await DriversRepo.ensure_driver_id(driver_name, driver_phone)  
     print(f"🆔 Using agent_id={agent_db_id}, driver_id={driver_db_id} for calllog insert")
 
     async with SupabaseClient().client() as c:
@@ -84,7 +84,7 @@ async def start_call(payload: StartCallIn, request: Request):
     """
     provider_call_id = f"retell_{int(time.time() * 1000)}"
 
-    # Pre-create calllog row with FK ids
+    
     await create_supabase_calllog(
         provider_call_id,
         payload.load_number,
@@ -92,7 +92,7 @@ async def start_call(payload: StartCallIn, request: Request):
         payload.driver_phone,
     )
 
-    # Build dynamic vars; OMIT optional keys if empty/None
+    
     dyn_vars: dict[str, str] = {
         "driver_name": payload.driver_name,
         "load_number": payload.load_number,
@@ -106,7 +106,7 @@ async def start_call(payload: StartCallIn, request: Request):
     }
 
     if payload.call_type.lower() == "phone":
-        # validate required phone fields
+        
         if not (payload.driver_phone and payload.driver_phone.strip()) or not (payload.from_number and payload.from_number.strip()):
             raise HTTPException(
                 status_code=400,
@@ -142,7 +142,7 @@ async def start_call(payload: StartCallIn, request: Request):
             raise HTTPException(status_code=r.status_code, detail=r.text)
         call = r.json()
 
-    # persist retell_call_id for correlation
+    
     try:
         await _update_supabase_calllog(provider_call_id, {"retell_call_id": call.get("call_id")})
     except Exception as e:

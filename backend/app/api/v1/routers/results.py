@@ -1,4 +1,3 @@
-# app/api/v1/routers/results.py  (replace the route)
 from fastapi import APIRouter, Query
 from app.services.supabase import SupabaseClient
 
@@ -23,6 +22,6 @@ async def list_results(load_number: str | None = Query(None), limit: int = 50):
 
         if r.status_code >= 400:
             print("❌ Supabase GET failed:", r.status_code, r.text)
-            return []  # avoid blowing up the UI; return empty
+            return []  
 
         return r.json()

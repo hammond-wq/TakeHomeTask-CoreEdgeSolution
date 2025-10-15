@@ -9,7 +9,7 @@ from app.services.postprocess import summarize_transcript
 
 router = APIRouter(prefix="/api/v1/retell", tags=["retell"])
 
-# ---------------- Helpers for saving to Supabase ---------------- #
+
 
 async def _patch_calllog_by_retell(retell_call_id: str, patch: dict) -> None:
     if not retell_call_id:
@@ -17,7 +17,7 @@ async def _patch_calllog_by_retell(retell_call_id: str, patch: dict) -> None:
     async with SupabaseClient().client() as c:
         await c.patch("/calllog", params={"retell_call_id": f"eq.{retell_call_id}"}, json=patch)
 
-# ---------------- Conversation policy: stateful slot filling ---------------- #
+
 
 TIME_RE = re.compile(r"\b(?:at\s*)?(\d{1,2}:\d{2}\s*(?:am|pm)?)\b|\b(?:in\s*)?(\d+)\s*(?:min|mins|minutes|hr|hrs|hours)\b", re.I)
 CITY_HWY_RE = re.compile(r"\b(?:i-\d{1,3}|us-\d{1,3}|hwy\s*\d+|highway\s*\d+|[A-Z][a-z]+(?:,\s*[A-Z]{2})?)\b")
@@ -76,7 +76,7 @@ def _confirm_wrap(state: dict) -> Tuple[str, bool, dict]:
     reason = state.get("delay_reason") or "None"
     unload = state.get("unloading_status") or "N/A"
 
-    # outcome
+    
     if status in ("Arrived","Unloading"):
         outcome = "Arrival Confirmation"
     else:
@@ -87,7 +87,7 @@ def _confirm_wrap(state: dict) -> Tuple[str, bool, dict]:
     return msg, True, state
 
 def draft_reply(latest_user: str, state: dict) -> tuple[str, bool, dict]:
-    # Emergency gate
+    
     emerg = _detect_emergency(latest_user)
     if emerg:
         state.update({"scenario":"Emergency","emergency_type":emerg})
@@ -97,7 +97,7 @@ def draft_reply(latest_user: str, state: dict) -> tuple[str, bool, dict]:
             state
         )
 
-    # Bad audio / uncooperative handling
+    
     if _is_noisy(latest_user):
         n = int(state.get("noisy_count", 0)) + 1
         state["noisy_count"] = n
@@ -112,7 +112,7 @@ def draft_reply(latest_user: str, state: dict) -> tuple[str, bool, dict]:
             return "I’ll let you go and follow up later. Drive safe.", True, state
         return "Could you share your current location and ETA for this load?", False, state
 
-    # Update slots
+    
     status = _classify_status(latest_user)
     if status and status != state.get("driver_status"):
         state["driver_status"] = status
@@ -130,7 +130,7 @@ def draft_reply(latest_user: str, state: dict) -> tuple[str, bool, dict]:
             dr = extract_delay_reason(latest_user)
             if dr: state["delay_reason"] = dr
 
-        # Ask missing pieces one by one
+       
         if "current_location" not in state:
             return "Thanks. What’s your current location? (highway and nearest city)", False, state
         if "eta" not in state:
@@ -166,7 +166,7 @@ def draft_reply(latest_user: str, state: dict) -> tuple[str, bool, dict]:
 
     return "Thanks. Anything else I should record?", False, state
 
-# ---------------- HTTP fallback (for quick tests) ---------------- #
+
 
 @router.post("/llm-webhook")
 async def llm_webhook_http(request: Request):
@@ -176,7 +176,7 @@ async def llm_webhook_http(request: Request):
     text, end_call, new_state = draft_reply(latest, p.get("state") or {})
     return {"text": text, "end_call": end_call, "state": new_state}
 
-# ---------------- WebSocket endpoint (Retell Custom LLM) ---------------- #
+
 
 @router.websocket("/llm-webhook/{call_id}")
 async def llm_webhook_ws(ws: WebSocket, call_id: str):
@@ -186,15 +186,15 @@ async def llm_webhook_ws(ws: WebSocket, call_id: str):
     await ws.accept()
     state: dict = {}
     transcript_lines: List[str] = []
-    last_idx = 0  # last processed length of transcript array
+    last_idx = 0  
 
-    # Optional config so Retell shares call details (safe defaults)
+   
     await ws.send_text(json.dumps({
         "response_type": "config",
         "config": {"call_details": True, "auto_reconnect": False, "transcript_with_tool_calls": False},
     }))
 
-    # BEGIN message
+    
     await ws.send_text(json.dumps({
         "response_type": "response",
         "response_id": 0,
@@ -230,7 +230,7 @@ async def llm_webhook_ws(ws: WebSocket, call_id: str):
                 continue
 
             interaction_type = (req.get("interaction_type") or "").lower()
-            # Collect new transcript turns (avoid duplicating earlier frames)
+            
             tr = req.get("transcript")
             if isinstance(tr, list):
                 for utt in tr[last_idx:]:
@@ -241,11 +241,11 @@ async def llm_webhook_ws(ws: WebSocket, call_id: str):
                 last_idx = len(tr)
 
             if interaction_type in {"update_only", "call_details", "ping_pong"}:
-                # Save partials occasionally so UI can show near-real-time results
+                
                 await _persist_now(status_val="updated")
                 continue
 
-            # Normal response path
+            
             latest = _latest_user(tr or [])
             content, end_call, state = draft_reply(latest, state)
 
@@ -257,7 +257,7 @@ async def llm_webhook_ws(ws: WebSocket, call_id: str):
                 "end_call": end_call,
             }))
 
-            # Save current snapshot after each turn
+            
             await _persist_now(status_val="updated", force_end=end_call)
 
             if end_call:
@@ -265,6 +265,6 @@ async def llm_webhook_ws(ws: WebSocket, call_id: str):
                 break
 
     except WebSocketDisconnect:
-        # Persist whatever we have on disconnect
+       
         await _persist_now(force_end=True)
         return
