@@ -7,6 +7,7 @@ import DashboardPage from "./assets/pages/DashboardPage";
 import AgentConfigPage from "./assets/pages/AgentConfigPage"
 import CallTriggerPage from "./assets/pages/CallTriggerPage";
 import AnalyticsPage from "./assets/pages/AnalyticsPage";
+import ConversationsPage from "./assets/pages/ConversationsPage";
 
 const AppRoutes = () => (
   <Router>
@@ -20,7 +21,7 @@ const AppRoutes = () => (
         <Route path="/agent-config" element={<AgentConfigPage />} />
         <Route path="/call-trigger" element={<CallTriggerPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-       
+        <Route path="/conversations" element={<ConversationsPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

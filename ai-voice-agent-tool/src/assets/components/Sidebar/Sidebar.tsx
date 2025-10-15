@@ -1,6 +1,14 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { FaTachometerAlt, FaUserCog, FaPhoneAlt, FaChartLine, FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import {
+  FaTachometerAlt,
+  FaUserCog,
+  FaPhoneAlt,
+  FaChartLine,
+  FaComments,
+  FaChevronLeft,
+  FaChevronRight,
+} from "react-icons/fa";
 
 type SidebarProps = {
   collapsed: boolean;
@@ -26,6 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           onClick={onToggle}
           className="p-2 rounded-md hover:bg-white/10"
           aria-label="Toggle sidebar"
+          title="Toggle sidebar"
         >
           {collapsed ? <FaChevronRight /> : <FaChevronLeft />}
         </button>
@@ -35,6 +44,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <NavLink
           to="/dashboard"
           className={({ isActive }) => `${linkBase} ${isActive ? linkActive : ""}`}
+          title="Dashboard"
+          aria-label="Dashboard"
         >
           <FaTachometerAlt />
           {!collapsed && <span>Dashboard</span>}
@@ -43,6 +54,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <NavLink
           to="/agent-config"
           className={({ isActive }) => `${linkBase} ${isActive ? linkActive : ""}`}
+          title="Agent Config"
+          aria-label="Agent Config"
         >
           <FaUserCog />
           {!collapsed && <span>Agent Config</span>}
@@ -51,14 +64,28 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <NavLink
           to="/call-trigger"
           className={({ isActive }) => `${linkBase} ${isActive ? linkActive : ""}`}
+          title="Call Trigger"
+          aria-label="Call Trigger"
         >
           <FaPhoneAlt />
           {!collapsed && <span>Call Trigger</span>}
         </NavLink>
 
         <NavLink
+          to="/conversations"
+          className={({ isActive }) => `${linkBase} ${isActive ? linkActive : ""}`}
+          title="Conversations"
+          aria-label="Conversations"
+        >
+          <FaComments />
+          {!collapsed && <span>Conversations</span>}
+        </NavLink>
+
+        <NavLink
           to="/analytics"
           className={({ isActive }) => `${linkBase} ${isActive ? linkActive : ""}`}
+          title="Analytics"
+          aria-label="Analytics"
         >
           <FaChartLine />
           {!collapsed && <span>Analytics</span>}

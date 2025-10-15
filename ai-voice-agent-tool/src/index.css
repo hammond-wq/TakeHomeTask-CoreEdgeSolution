@@ -13,3 +13,9 @@ html,body,#root{height:100%}
 body{ @apply bg-[var(--bg)] text-[var(--ink)] font-sans antialiased; }
 .page-wrap{ @apply min-h-screen; }
 .panel{ @apply bg-white rounded-2xl shadow-md; }
+/* tailwind-ish quick classes in your global.css (optional) */
+.th { @apply text-left font-medium p-3; }
+.td { @apply p-3 align-top; }
+.btn { @apply inline-flex items-center px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60; }
+.btn.ghost { @apply bg-transparent text-gray-700 border border-gray-300 hover:bg-gray-50; }
+.input { @apply w-full p-2 rounded border border-gray-300; }
