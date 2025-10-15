@@ -7,6 +7,8 @@ from app.api.v1.routers.llm_webhook import router as llm_router
 from app.api.v1.routers.results import router as results_router
 from app.api.v1.routers.agents_supabase import router as agents_router
 from app.api.v1.routers.dev_diag import router as dev_router
+from app.api.v1.routers import metrics
+from app.api.v1.routers import conversations
 
 
 
@@ -27,6 +29,9 @@ app.include_router(llm_router)
 app.include_router(results_router)
 app.include_router(agents_router)
 app.include_router(dev_router)
+app.include_router(metrics.router)
+app.include_router(conversations.router)
+
 
 @app.get("/healthz")
 def healthz():
