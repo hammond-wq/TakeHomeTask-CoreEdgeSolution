@@ -1,89 +1,39 @@
 # app/services/postprocess.py
-from __future__ import annotations
 import re
-from typing import Dict, Any
 
-EMERGENCY_KEYWORDS = [
-    "emergency", "accident", "blowout", "crash", "medical", "pulling over", "pulled over"
-]
+def summarize_transcript(text: str) -> dict:
+    t = (text or "").lower()
 
-def _has_emergency(text: str) -> bool:
-    t = text.lower()
-    return any(k in t for k in EMERGENCY_KEYWORDS)
+    # detect emergency first
+    if any(k in t for k in ["accident","crash","collision","blowout","breakdown","medical"]):
+        return {
+            "call_outcome": "Emergency Escalation",
+            "emergency_type": ("Accident" if "accident" in t or "crash" in t else
+                               "Breakdown" if "blowout" in t or "breakdown" in t else
+                               "Medical" if "medical" in t else "Other"),
+            "safety_status": "Driver confirmed safe" if "i'm safe" in t or "i am safe" in t else "Unknown",
+            "injury_status": "No injuries reported" if "no injur" in t else "Unknown",
+            "emergency_location": _first(r"(i-\d+|us-\d+|mile\s*marker\s*\d+|[A-Z][a-z]+,\s*[A-Z]{2})", t),
+            "load_secure": "true" if "load secure" in t else "false" if "load not secure" in t else "unknown",
+            "escalation_status": "Connected to Human Dispatcher",
+        }
 
-def _extract_location(text: str) -> str | None:
-    # naive location hints (highways, mile markers, cities)
-    mm = re.search(r"(i[-\s]?\d+\s*(north|south|east|west)?(?:,\s*mile\s*marker\s*\d+)?)", text, re.I)
-    if mm: return mm.group(0)
-    city = re.search(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b(?:,\s*[A-Z]{2})?", text)
-    return city.group(0) if city else None
+    status = ("Unloading" if "unloading" in t or "lumper" in t or "detention" in t else
+              "Arrived" if "arrived" in t or "checked in" in t or "in door" in t else
+              "Delayed" if "delay" in t or "late" in t else "Driving")
 
-def _extract_eta(text: str) -> str | None:
-    m = re.search(r"(eta|arriv(e|al))[^\.:\n]*?((\d{1,2}[:.]\d{2}\s*(am|pm))|tomorrow|today|in\s+\d+\s*(min|mins|minutes|hours|hrs))", text, re.I)
-    return m.group(0) if m else None
-
-def _extract_unloading(text: str) -> str | None:
-    for k in ["unloading", "door", "lumper", "detention", "waiting"]:
-        if k in text.lower(): return k.title()
-    return None
-
-def _extract_delay(text: str) -> str | None:
-    t = text.lower()
-    if "traffic" in t: return "Heavy Traffic"
-    if "weather" in t or "snow" in t or "rain" in t: return "Weather"
-    if "breakdown" in t: return "Mechanical"
-    return "None"
-
-def _extract_status(text: str) -> str:
-    t = text.lower()
-    if "arrived" in t: return "Arrived"
-    if "unloading" in t or "in door" in t or "dock" in t: return "Unloading"
-    if "delay" in t or "late" in t: return "Delayed"
-    return "Driving"
-
-def _extract_pod_ack(text: str) -> bool:
-    t = text.lower()
-    return "pod" in t and any(k in t for k in ["email", "send", "text", "will", "share", "upload"])
-
-def _extract_emergency_fields(text: str) -> Dict[str, Any]:
-    t = text.lower()
-    if "blowout" in t or "flat" in t: etype = "Breakdown"
-    elif "accident" in t or "crash" in t or "collision" in t: etype = "Accident"
-    elif "medical" in t or "injur" in t: etype = "Medical"
-    else: etype = "Other"
-    safety = "Driver confirmed everyone is safe" if "safe" in t else "Unknown"
-    injury = "No injuries reported" if "no injur" in t or "nobody hurt" in t else ("Injuries reported" if "injur" in t or "hurt" in t else "Unknown")
-    loc = _extract_location(text) or "Unknown"
-    load_secure = "secure" in t or "strapped" in t
     return {
-        "emergency_type": etype,
-        "safety_status": safety,
-        "injury_status": injury,
-        "emergency_location": loc,
-        "load_secure": load_secure,
-        "escalation_status": "Connected to Human Dispatcher",
+        "call_outcome": "Arrival Confirmation" if status in ("Arrived","Unloading") else "In-Transit Update",
+        "driver_status": status,
+        "current_location": _first(r"(i-\d+|us-\d+|hwy\s*\d+|[A-Z][a-z]+,\s*[A-Z]{2})", t),
+        "eta": _first(r"(\d{1,2}:\d{2}\s*(?:am|pm)?)|(\d+\s*(?:min|mins|minutes|hr|hrs|hours))", t),
+        "delay_reason": _first(r"(traffic|weather|construction|breakdown|accident|police|detour)", t, title=True) or "None",
+        "unloading_status": _first(r"(door\s*\d+|in\s*door|waiting\s*for\s*lumper|detention|unloading)", t, title=True) or "N/A",
+        "pod_reminder_acknowledged": "true" if "pod" in t and ("ok" in t or "will do" in t) else "false",
     }
 
-def summarize_transcript(transcript: str) -> Dict[str, Any]:
-    """
-    Returns a dict matching the doc's required fields for:
-      - Scenario 1 (check-in)
-      - Scenario 2 (emergency escalation)
-    """
-    if _has_emergency(transcript):
-        fields = {"call_outcome": "Emergency Escalation"}
-        fields.update(_extract_emergency_fields(transcript))
-        return fields
-
-    # Scenario 1 – End-to-end check-in
-    status = _extract_status(transcript)
-    outcome = "Arrival Confirmation" if status in ("Arrived", "Unloading") else "In-Transit Update"
-    return {
-        "call_outcome": outcome,
-        "driver_status": status,                  # Driving / Delayed / Arrived / Unloading
-        "current_location": _extract_location(transcript) or "Unknown",
-        "eta": _extract_eta(transcript) or "Unknown",
-        "delay_reason": _extract_delay(transcript),
-        "unloading_status": _extract_unloading(transcript) or ("N/A" if status not in ("Arrived","Unloading") else "Unknown"),
-        "pod_reminder_acknowledged": _extract_pod_ack(transcript),
-    }
+def _first(pattern: str, text: str, title: bool=False):
+    m = re.search(pattern, text, re.I)
+    if not m: return None
+    s = m.group(0)
+    return s.title() if title else s
