@@ -11,7 +11,7 @@ const ThreeScene = () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Add a rotating sphere to the scene
+    
     const geometry = new THREE.SphereGeometry(1, 32, 32);
     const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const sphere = new THREE.Mesh(geometry, material);
@@ -30,7 +30,7 @@ const ThreeScene = () => {
 
     animate();
 
-    // Handle resizing
+  
     window.addEventListener('resize', () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
       camera.aspect = window.innerWidth / window.innerHeight;
