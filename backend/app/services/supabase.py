@@ -1,25 +1,24 @@
+# app/services/supabase.py
 from __future__ import annotations
 import httpx
-
-# Hardcoded values (replace these with actual values)
-SUPABASE_URL = "https://tdqfcycljpezeygmoxch.supabase.co"
-SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkcWZjeWNsanBlemV5Z21veGNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0NDUzNzcsImV4cCI6MjA3NjAyMTM3N30.2zJPoU-TTt_ft_EFUfeqvJ_QY1bNoo_bxMzCqgGQuDk"
-
-# Check if the variables are set correctly
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    raise RuntimeError("Set SUPABASE_URL and SUPABASE_SERVICE_KEY")
-
-def supa_headers():
-    return {
-        "apikey": SUPABASE_SERVICE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-    }
+from contextlib import asynccontextmanager
+from app.core.config import settings
 
 class SupabaseClient:
     def __init__(self):
-        self._base = f"{SUPABASE_URL}/rest/v1"
+        self.base_url = settings.supabase_url.rstrip("/") + "/rest/v1"
+        self.headers = {
+            "apikey": settings.supabase_service_key,
+            "Authorization": f"Bearer {settings.supabase_service_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            # return inserted/updated rows so we can debug easily
+            "Prefer": "return=representation",
+        }
 
-    def client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(base_url=self._base, headers=supa_headers())
+    @asynccontextmanager
+    async def client(self):
+        async with httpx.AsyncClient(
+            base_url=self.base_url, headers=self.headers, timeout=30.0
+        ) as c:
+            yield c

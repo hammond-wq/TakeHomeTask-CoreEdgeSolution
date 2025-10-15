@@ -1,14 +1,27 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from pydantic import Field, AliasChoices
 
 class Settings(BaseSettings):
-    env: str = "dev"
-    api_prefix: str = "/api"
-    cors_origins: List[str] = ["http://localhost:5173"]
-    database_url: str
-    retell_api_key: str
-    retell_base_url: str = "https://api.retellai.com"
+    app_name: str = "ai-voice-agent-tool"
+    environment: str = "dev"
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", case_sensitive=False)
+    # Retell
+    retell_base_url: str = Field(
+        default="https://api.retellai.com",
+        validation_alias=AliasChoices("RETELL_BASE_URL", "retell_base_url"),
+    )
+    retell_api_key: str = Field(validation_alias=AliasChoices("RETELL_API_KEY", "retell_api_key"))
+    retell_webhook_secret: str = Field(default="", validation_alias=AliasChoices("RETELL_WEBHOOK_SECRET", "retell_webhook_secret"))
+    retell_agent_id: str = Field(validation_alias=AliasChoices("RETELL_AGENT_ID", "retell_agent_id"))
+    retell_agent_version: int = Field(default=1, validation_alias=AliasChoices("RETELL_AGENT_VERSION", "retell_agent_version"))
+
+    # Supabase
+    supabase_url: str = Field(validation_alias=AliasChoices("SUPABASE_URL", "supabase_url"))
+    supabase_service_key: str = Field(validation_alias=AliasChoices("SUPABASE_SERVICE_KEY", "supabase_service_key"))
+
+    # CORS
+    cors_origins: str = Field(default="*", validation_alias=AliasChoices("CORS_ORIGINS", "cors_origins"))
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
 settings = Settings()
