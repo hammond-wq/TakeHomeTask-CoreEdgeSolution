@@ -12,7 +12,7 @@ from app.services.drivers_repo import DriversRepo
 
 router = APIRouter(prefix="/api/v1/retell", tags=["retell"])
 
-# ---------- signature ----------
+
 
 def _verify_signature(headers, body: bytes) -> bool:
     secret = (settings.retell_webhook_secret or "").encode()
@@ -24,7 +24,7 @@ def _verify_signature(headers, body: bytes) -> bool:
     expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, sig)
 
-# ---------- supabase helpers ----------
+
 
 async def _patch_calllog(where: dict, patch: dict) -> bool:
     async with SupabaseClient().client() as c:
@@ -53,7 +53,7 @@ async def _post_calllog(row: dict):
         print("↪️  POST /calllog", r.status_code, data)
         return r
 
-# ---------- payload helpers ----------
+
 
 def _pluck_call(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -92,12 +92,11 @@ def _pluck_transcript(call_obj: Dict[str, Any]) -> str:
     t = call_obj.get("transcript") or call_obj.get("transcript_text")
     if isinstance(t, str) and t.strip():
         return t.strip()
-    # try object array
+    
     obj = call_obj.get("transcript_object") or call_obj.get("transcript_with_tool_calls")
     s = _text_from_transcript_object(obj)
     return s.strip()
 
-# ---------- webhook ----------
 
 @router.post("/webhook")
 async def retell_webhook(request: Request):
@@ -108,17 +107,17 @@ async def retell_webhook(request: Request):
     try:
         payload = json.loads(raw.decode("utf-8"))
     except Exception:
-        # Accept to avoid retries, but nothing to do
+      
         return {"ok": True}
 
-    # 0) Challenge handshake
+
     if isinstance(payload, dict) and "challenge" in payload:
         return {"challenge": payload["challenge"]}
 
     event = (payload.get("event") or "").lower()
     call = _pluck_call(payload)
 
-    # Pick identifiers & metadata (must be taken from 'call')
+    
     retell_call_id = call.get("call_id") or call.get("id")
     metadata = call.get("metadata") or {}
     provider_call_id = metadata.get("provider_call_id")
@@ -128,29 +127,29 @@ async def retell_webhook(request: Request):
     driver_name = dyn.get("driver_name") or metadata.get("driver_name")
     driver_phone = dyn.get("driver_phone") or metadata.get("driver_phone")
 
-    # On call_started → only patch if we can find a stub row; don't create new rows
+    
     if event == "call_started":
         patch = {
             "retell_call_id": retell_call_id,
             "load_number": load_number,
             "status": "started",
         }
-        # Try to patch by provider_call_id first (created by /calls/start), else by retell_call_id
+     
         patched = False
         if provider_call_id:
             patched = await _patch_calllog({"provider_call_id": provider_call_id}, patch)
         if not patched and retell_call_id:
             patched = await _patch_calllog({"retell_call_id": retell_call_id}, patch)
-        # don’t create row on start; just acknowledge
+        
         return {"ok": True, "patched": patched}
 
-    # For call_ended (and call_analyzed) we persist transcript and summary
+   
     if event in {"call_ended", "call_analyzed"}:
         transcript = _pluck_transcript(call)
         summary = summarize_transcript(transcript or "")
         scenario = "Emergency" if summary.get("call_outcome") == "Emergency Escalation" else "Dispatch"
 
-        # Ensure foreign keys (safe even if tables empty)
+      
         agent_db_id = (await AgentsRepo.ensure_agent_id()) or 1
         driver_db_id = (await DriversRepo.ensure_driver_id(driver_name, driver_phone)) or 1
 
@@ -165,7 +164,7 @@ async def retell_webhook(request: Request):
             "agent_id": agent_db_id,
             "driver_id": driver_db_id,
         }
-        # remove None values
+       
         patch = {k: v for k, v in patch.items() if v is not None}
 
         updated = False
