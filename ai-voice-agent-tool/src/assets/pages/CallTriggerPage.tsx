@@ -1,6 +1,6 @@
-
+// src/pages/CallTriggerPage.tsx
 import React from "react";
-import CallTrigger from "../components/CallTrigger/CallTrigger";
+import CallTrigger from "../components/CallTrigger/CallTrigger"; // <-- fix path
 
 const CallTriggerPage: React.FC = () => (
   <div className="max-w-2xl mx-auto">
