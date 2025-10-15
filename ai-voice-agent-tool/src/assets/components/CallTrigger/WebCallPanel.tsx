@@ -1,4 +1,4 @@
-// src/assets/components/CallTrigger/WebCallPanel.tsx
+
 import React, { useEffect, useRef, useState } from "react";
 import { RetellWebClient } from "retell-client-js-sdk";
 
@@ -13,14 +13,18 @@ const WebCallPanel: React.FC<Props> = ({ callId, accessToken }) => {
     try {
       const client = new RetellWebClient();
 
-      client.on("call_started", () => setStatus("connected"));
-      client.on("call_ended", () => setStatus("ended"));
-      client.on("error", (error) => {
-        console.error("Call error:", error);
-        setErr(error?.message || "Unknown error");
-        setStatus("error");
-        client.stopCall();
-      });
+  
+      const log = (...args: any[]) => console.log("[RetellWebClient]", ...args);
+
+      client.on?.("room_joined", () => { log("room_joined"); setStatus("connected"); });
+      client.on?.("call_started", () => { log("call_started"); setStatus("connected"); });
+      client.on?.("conversation_started", () => log("conversation_started"));
+      client.on?.("agent_response", (d: any) => log("agent_response", d));
+      client.on?.("user_speech", (d: any) => log("user_speech", d));
+      client.on?.("ice_connection_state_change", (s: any) => log("ice_state", s));
+      client.on?.("media_device_error", (e: any) => { log("media_device_error", e); setErr("Mic/Audio device error"); setStatus("error"); });
+      client.on?.("error", (e: any) => { log("error", e); setErr(e?.message || "Unknown error"); setStatus("error"); });
+      client.on?.("call_ended", () => { log("call_ended"); setStatus("ended"); });
 
       clientRef.current = client;
       setStatus("ready");
@@ -30,9 +34,7 @@ const WebCallPanel: React.FC<Props> = ({ callId, accessToken }) => {
     }
 
     return () => {
-      try {
-        clientRef.current?.stopCall();
-      } catch {}
+      try { clientRef.current?.stopCall?.(); } catch {}
       clientRef.current = null;
     };
   }, []);
@@ -43,7 +45,6 @@ const WebCallPanel: React.FC<Props> = ({ callId, accessToken }) => {
       setStatus("error");
       return;
     }
-
     if (!accessToken) {
       setErr("Missing access token");
       setStatus("error");
@@ -52,18 +53,21 @@ const WebCallPanel: React.FC<Props> = ({ callId, accessToken }) => {
 
     try {
       setStatus("joining");
+
+ 
       await clientRef.current.startCall({ accessToken });
-      // call_started event will handle setting "connected"
+
+
+     
     } catch (e: any) {
+      console.error("startCall failed", e);
       setStatus("error");
       setErr(e?.message || "Failed to start call");
     }
   };
 
   const end = async () => {
-    try {
-      await clientRef.current?.stopCall();
-    } catch {}
+    try { await clientRef.current?.stopCall?.(); } catch {}
   };
 
   return (

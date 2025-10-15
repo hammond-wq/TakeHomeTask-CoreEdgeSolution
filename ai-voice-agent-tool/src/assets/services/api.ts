@@ -1,4 +1,4 @@
-// src/services/api.ts
+
 export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
 export type StartWebCallResponse = {
@@ -6,7 +6,7 @@ export type StartWebCallResponse = {
   retell: {
     call_id: string;
     access_token: string;
-    // ...other fields we don't strictly need to join the call
+    
   };
 };
 
