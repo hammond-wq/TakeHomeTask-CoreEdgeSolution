@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { listResults } from "../services/api";
 
 const pretty = (v: unknown) => (typeof v === "object" ? JSON.stringify(v, null, 2) : String(v ?? ""));
@@ -21,8 +21,6 @@ const ResultsPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { /* optional: auto fetch */ }, []);
-
   const latest = items?.[0];
 
   return (
@@ -31,12 +29,12 @@ const ResultsPage: React.FC = () => {
       <div className="panel p-4 grid gap-3">
         <div className="flex gap-2">
           <input
-            className="border rounded px-3 py-2 flex-1"
+            className="input flex-1"
             placeholder="Filter by load number (optional)"
             value={load}
             onChange={(e) => setLoad(e.target.value)}
           />
-          <button onClick={run} disabled={busy} className="px-4 py-2 rounded bg-vite-green text-white">
+          <button onClick={run} disabled={busy} className="btn">
             {busy ? "Loading..." : "Fetch"}
           </button>
         </div>
