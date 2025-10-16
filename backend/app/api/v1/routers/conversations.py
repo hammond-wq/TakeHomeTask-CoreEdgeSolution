@@ -44,13 +44,13 @@ async def _fetch_conversations(
     limit = max(1, min(200, limit))
     offset = (page - 1) * limit
 
-    # driver join (inner join if filtering by driver name)
+    
     driver_select = "driver:driver_id(name,phone_number)"
     join_driver_inner = bool(driver_name)
     if join_driver_inner:
         driver_select = "driver!inner(name,phone_number)"
 
-    # Build PostgREST params as a list of tuples (so we can repeat keys)
+    
     params: List[Tuple[str, str]] = [
         ("select", f"id,created_at,load_number,status,scenario,transcript,structured_payload,{driver_select}"),
         ("order", "created_at.desc"),
@@ -74,7 +74,7 @@ async def _fetch_conversations(
     if until:
         params.append(("created_at", f"lte.{until}"))
 
-    # Query Supabase
+    
     async with SupabaseClient().client() as c:
         r = await c.get(
             "/calllog",
@@ -85,7 +85,7 @@ async def _fetch_conversations(
             raise HTTPException(r.status_code, r.text)
 
         data = r.json()
-        # Parse Content-Range like: items 0-19/123
+        
         total = None
         cr = r.headers.get("content-range") or ""
         if "/" in cr:
@@ -96,7 +96,7 @@ async def _fetch_conversations(
 
         return data, (total or len(data))
 
-@router.get("/")  # NOTE: use "/" not ""
+@router.get("/")  
 async def list_conversations(
     q: str | None = Query(None),
     driver_name: str | None = Query(None),
