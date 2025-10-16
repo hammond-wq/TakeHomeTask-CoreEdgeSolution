@@ -1,6 +1,11 @@
-from fastapi import FastAPI
+# app/main.py
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.core.config import settings, setup_logging
 from app.api.v1.routers.calls import router as calls_router
 from app.api.v1.routers.retell_webhook import router as retell_router
 from app.api.v1.routers.llm_webhook import router as llm_router
@@ -10,9 +15,11 @@ from app.api.v1.routers.dev_diag import router as dev_router
 from app.api.v1.routers import metrics
 from app.api.v1.routers import conversations
 
+from app.middleware.error_handler import http_error_handler
+from app.middleware.request_id import RequestIDMiddleware
+from app.middleware.request_timing import RequestTimingMiddleware
 
-
-
+setup_logging()
 app = FastAPI(title=settings.app_name)
 
 app.add_middleware(
@@ -22,6 +29,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(RequestTimingMiddleware)
 
 app.include_router(calls_router)
 app.include_router(retell_router)
@@ -32,6 +41,17 @@ app.include_router(dev_router)
 app.include_router(metrics.router)
 app.include_router(conversations.router)
 
+@app.exception_handler(StarletteHTTPException)
+async def _http_exc_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+@app.exception_handler(RequestValidationError)
+async def _validation_exc_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+@app.exception_handler(Exception)
+async def _unhandled_exc_handler(request: Request, exc: Exception):
+    return await http_error_handler(request, exc)
 
 @app.get("/healthz")
 def healthz():

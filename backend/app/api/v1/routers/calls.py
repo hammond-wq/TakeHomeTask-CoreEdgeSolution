@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.services.supabase import SupabaseClient
 from app.services.agents_repo import AgentsRepo
 from app.services.drivers_repo import DriversRepo
+from app.services.calllog_repo import CallLogRepo
 
 router = APIRouter(prefix="/api/v1/calls", tags=["calls"])
 
@@ -23,21 +24,15 @@ if not RETELL_API_KEY or not RETELL_AGENT_ID:
 CREATE_WEB_CALL_URL   = f"{RETELL_BASE}/v2/create-web-call"
 CREATE_PHONE_CALL_URL = f"{RETELL_BASE}/v2/create-phone-call"
 
-
 class StartCallIn(BaseModel):
     driver_name: str
-    driver_phone: str | None = None  
+    driver_phone: str | None = None
     load_number: str
-    call_type: str = "web"           
-    from_number: str | None = None   
-
+    call_type: str = "web"
+    from_number: str | None = None
 
 def retell_headers() -> dict:
-    return {
-        "Authorization": f"Bearer {RETELL_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
+    return {"Authorization": f"Bearer {RETELL_API_KEY}", "Content-Type": "application/json"}
 
 async def create_supabase_calllog(
     provider_call_id: str,
@@ -45,37 +40,30 @@ async def create_supabase_calllog(
     driver_name: str | None,
     driver_phone: str | None,
 ) -> None:
-    agent_db_id = await AgentsRepo.ensure_agent_id()             
-    driver_db_id = await DriversRepo.ensure_driver_id(driver_name, driver_phone)  
+    agent_db_id = await AgentsRepo.ensure_agent_id()
+    driver_db_id = await DriversRepo.ensure_driver_id(driver_name, driver_phone)
     print(f"🆔 Using agent_id={agent_db_id}, driver_id={driver_db_id} for calllog insert")
 
-    async with SupabaseClient().client() as c:
-        payload = {
-            "provider_call_id": provider_call_id,
-            "load_number": load_number,
-            "status": "initiated",
-            "structured_payload": {},
-            "agent_id": agent_db_id,
-            "driver_id": driver_db_id,
-        }
-        r = await c.post("/calllog", json=payload)
-        try:
-            data = r.json()
-        except Exception:
-            data = r.text
-        print("↪️  INSERT /calllog", r.status_code, data)
-
+    payload = {
+        "provider_call_id": provider_call_id,
+        "load_number": load_number,
+        "status": "initiated",
+        "structured_payload": {},
+        "agent_id": agent_db_id,
+        "driver_id": driver_db_id,
+    }
+    try:
+        await CallLogRepo.post(payload)
+        print("↪️  INSERT /calllog OK")
+    except Exception as e:
+        print("↪️  INSERT /calllog FAILED:", repr(e))
 
 async def _update_supabase_calllog(provider_call_id: str, patch: dict) -> None:
-    async with SupabaseClient().client() as c:
-        params = {"provider_call_id": f"eq.{provider_call_id}"}
-        r = await c.patch("/calllog", params=params, json=patch)
-        try:
-            data = r.json()
-        except Exception:
-            data = r.text
-        print("↪️  PATCH /calllog by provider_call_id", r.status_code, data)
-
+    try:
+        ok = await CallLogRepo.patch_by_provider(provider_call_id, patch)
+        print("↪️  PATCH /calllog by provider_call_id", "OK" if ok else "MISS")
+    except Exception as e:
+        print("↪️  PATCH /calllog FAILED:", repr(e))
 
 @router.post("/start")
 async def start_call(payload: StartCallIn, request: Request):
@@ -84,7 +72,6 @@ async def start_call(payload: StartCallIn, request: Request):
     """
     provider_call_id = f"retell_{int(time.time() * 1000)}"
 
-    
     await create_supabase_calllog(
         provider_call_id,
         payload.load_number,
@@ -92,7 +79,7 @@ async def start_call(payload: StartCallIn, request: Request):
         payload.driver_phone,
     )
 
-    
+  
     dyn_vars: dict[str, str] = {
         "driver_name": payload.driver_name,
         "load_number": payload.load_number,
@@ -100,19 +87,15 @@ async def start_call(payload: StartCallIn, request: Request):
     if payload.driver_phone and payload.driver_phone.strip():
         dyn_vars["driver_phone"] = payload.driver_phone.strip()
 
-    metadata = {
-        "load_number": payload.load_number,
-        "provider_call_id": provider_call_id,
-    }
+    metadata = {"load_number": payload.load_number, "provider_call_id": provider_call_id}
+
 
     if payload.call_type.lower() == "phone":
-        
         if not (payload.driver_phone and payload.driver_phone.strip()) or not (payload.from_number and payload.from_number.strip()):
             raise HTTPException(
                 status_code=400,
                 detail="driver_phone and from_number are required for phone calls",
             )
-
         req_body = {
             "agent_id": RETELL_AGENT_ID,
             "agent_version": RETELL_AGENT_VERSION,
@@ -122,7 +105,7 @@ async def start_call(payload: StartCallIn, request: Request):
             "retell_llm_dynamic_variables": dyn_vars,
         }
         url = CREATE_PHONE_CALL_URL
-        print(f"📞 POST {url}")
+        print(f" POST {url}")
         print("   Body:", req_body)
     else:
         req_body = {
@@ -138,15 +121,15 @@ async def start_call(payload: StartCallIn, request: Request):
     async with httpx.AsyncClient(headers=retell_headers(), timeout=30.0) as rc:
         r = await rc.post(url, json=req_body)
         if r.status_code >= 400:
-            print("❌ Retell error:", r.status_code, r.text)
+            print(" Retell error:", r.status_code, r.text)
             raise HTTPException(status_code=r.status_code, detail=r.text)
         call = r.json()
 
-    
+   
     try:
         await _update_supabase_calllog(provider_call_id, {"retell_call_id": call.get("call_id")})
     except Exception as e:
-        print("⚠️ Supabase calllog update failed:", e)
+        print(" Supabase calllog update failed:", e)
 
-    print("✅ Retell call created:", call)
+    print(" Retell call created:", call)
     return {"provider_call_id": provider_call_id, "retell": call}
