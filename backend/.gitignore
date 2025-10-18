@@ -1,3 +1,4 @@
 # Ignore virtual environments
 myenv/
 backend/myenv/
+.env
