@@ -29,7 +29,9 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SUPABASE_SERVICE_KEY", "supabase_service_key")
     )
 
-   
+    voice_vendor: str = Field(default="retell", validation_alias=AliasChoices("VOICE_VENDOR", "voice_vendor"))
+    pipecat_client_url: str = Field(default="http://localhost:7860/client/",
+                                    validation_alias=AliasChoices("PIPECAT_CLIENT_URL", "pipecat_client_url"))
     cors_origins: str = Field(default="*", validation_alias=AliasChoices("CORS_ORIGINS", "cors_origins"))
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")

@@ -21,7 +21,7 @@ async def list_results(load_number: str | None = Query(None), limit: int = 50):
                 r = await c.get("/calllog", params=params)
 
         if r.status_code >= 400:
-            print("❌ Supabase GET failed:", r.status_code, r.text)
+            print("Supabase GET failed:", r.status_code, r.text)
             return []  
 
         return r.json()
