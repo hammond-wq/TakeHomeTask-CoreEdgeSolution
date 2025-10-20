@@ -1,5 +1,7 @@
+# pipecat_bot/bot.py
 import os
-import time
+import re
+import math
 import datetime as dt
 import httpx
 from dotenv import load_dotenv
@@ -23,87 +25,38 @@ from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 
 
-from pipecat_whisker import WhiskerObserver
+try:
+    from pipecat_whisker import WhiskerObserver 
+except Exception:
+    WhiskerObserver = None
 
 
 load_dotenv(override=True)
 
-OPENAI_API_KEY    = os.getenv("OPENAI_API_KEY")
-DEEPGRAM_API_KEY  = os.getenv("DEEPGRAM_API_KEY")
-CARTESIA_API_KEY  = os.getenv("CARTESIA_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
 CARTESIA_VOICE_ID = os.getenv("CARTESIA_VOICE_ID", "71a7ad14-091c-4e8e-a314-022ece01c121")
-OPENAI_MODEL      = os.getenv("OPENAI_MODEL", "gpt-4.1")
-BACKEND_BASE      = os.getenv("BACKEND_BASE", "http://localhost:8000") 
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1")
+BACKEND_BASE = os.getenv("BACKEND_BASE", "http://127.0.0.1:8000")
+SYSTEM_PROMPT = os.getenv(
+    "SYSTEM_PROMPT",
+    "You are a friendly Dispatch call agent. Keep replies short, confirm load + driver, collect status (ETA/location/delay reason), and escalate emergencies."
+)
 
-SYSTEM_PROMPT = """
-You are DISPATCH CALL AGENT for a trucking company. Your job is to run a short, professional status call with a driver and capture operational details. Stay calm, clear, and efficient. One concise question at a time.
-
-GOALS (fill these if possible):
-- driver_status (Driving | Delayed | At pickup | At delivery | Waiting | Off-duty)
-- current_location (city or nearest landmark)
-- eta (ISO-ish like '14:30 local' or minutes/hours)
-- delay_reason (None | Traffic | Weather | Mechanical | Appointment | Facility | Other)
-- unloading_status (N/A | Waiting to unload | Unloading | Unloaded)
-- pod_reminder_acknowledged ('true' if you reminded them to send POD after delivery)
-- safety_flag ('true' if accident/medical/police/unsafe -> EMERGENCY ESCALATION)
-
-CALL FLOW:
-1) Greet & verify: “Hi, this is Dispatch. Can I get a quick status update for load <if known>? What’s your current location?”
-2) Collect fields above. Ask ONE question at a time. Keep replies short, radio-style.
-3) Confirm back the key facts you heard in a single concise sentence.
-4) If ‘delivery’ is complete or about to complete, remind them to send POD -> set pod_reminder_acknowledged.
-5) EMERGENCY: if driver mentions crash, injury, police, unsafe, or 'emergency', ask “Are you safe?”; gather location; say you’re escalating and end call quickly.
-
-STYLE:
-- Professional, empathetic, but concise. Prefer 5–15 word sentences.
-- Deflect personal or off-topic chatter with a short, polite line and steer back to the checklist.
-- If user says “stop” or no help needed, gracefully wrap up.
-
-OUTPUT BEHAVIOR:
-- Start the call proactively with a short greeting and first question.
-- Periodically echo back the important details you’ve captured so far.
-- Never invent data; say “not sure yet” and ask.
-"""
+KW_DEFAULT = ["emergency", "breakdown", "accident", "police", "hospital"]
+KEYWORDS = [k.strip().lower() for k in os.getenv("PIPECAT_KEYWORDS", ",".join(KW_DEFAULT)).split(",") if k.strip()]
 
 
 
-SEED_LOAD_NUMBER = os.getenv("SEED_LOAD_NUMBER")
-SEED_DRIVER_NAME = os.getenv("SEED_DRIVER_NAME")
-SEED_DRIVER_PHONE = os.getenv("SEED_DRIVER_PHONE")
-
-
-def _utcnow() -> dt.datetime:
+def _utcnow():
     return dt.datetime.now(dt.timezone.utc)
 
-def _get_context_messages(context: LLMContext):
-    """
-    Return a list[{'role','content'}], compatible across Pipecat versions.
-    """
-    try:
-        if hasattr(context, "to_universal_messages"):
-            msgs = context.to_universal_messages()
-            if isinstance(msgs, list):
-                return msgs
-        if hasattr(context, "messages"):
-            msgs = context.messages
-            if isinstance(msgs, list):
-                return msgs
-        if hasattr(context, "_messages"):
-            return list(getattr(context, "_messages"))
-    except Exception:
-        pass
-    return []
 
 def _format_transcript(messages):
-    """
-    Turn LLMContext messages into a simple 'Agent/User' transcript.
-    Filters out 'system' messages.
-    """
     lines = []
     for m in messages or []:
         role = (m.get("role") or "").lower()
-        if role == "system":
-            continue
         content = (m.get("content") or "").strip()
         if not content:
             continue
@@ -111,105 +64,73 @@ def _format_transcript(messages):
         lines.append(f"{who}: {content}")
     return "\n".join(lines)
 
-async def _seed_calllog_if_needed(provider_call_id: str) -> None:
-    """
-    Ask backend to create a calllog row for this provider_call_id if it doesn't exist.
-    Idempotent server-side.
-    """
-    payload = {
-        "provider_call_id": provider_call_id,
-        "load_number": SEED_LOAD_NUMBER,
-        "driver_name": SEED_DRIVER_NAME,
-        "driver_phone": SEED_DRIVER_PHONE,
+
+def _analytics_from_transcript(transcript: str) -> dict:
+    low = (transcript or "").lower()
+    kw_hits = {kw: len(re.findall(rf"\b{re.escape(kw)}\b", low)) for kw in KEYWORDS}
+    lines = [ln.strip() for ln in (transcript or "").splitlines() if ln.strip()]
+    driver_turns = agent_turns = interruptions_est = 0
+    prev = None
+    for ln in lines:
+        if ln.startswith("Driver:"):
+            driver_turns += 1
+            if prev == "Agent":
+                interruptions_est += 1
+            prev = "Driver"
+        elif ln.startswith("Agent:"):
+            agent_turns += 1
+            prev = "Agent"
+
+    return {
+        "keyword_hits": kw_hits,
+        "driver_turns": driver_turns,
+        "agent_turns": agent_turns,
+        "interruptions_est": interruptions_est,
+        "tokens_estimated": int(len(transcript) / 4) if transcript else 0,
     }
+
+
+async def _post_event(provider_call_id, event_type, data):
+    if not provider_call_id:
+        return
     try:
         async with httpx.AsyncClient(timeout=10.0) as rc:
-            r = await rc.post(f"{BACKEND_BASE}/api/v1/pipecat/seed", json=payload)
-            if r.status_code >= 400:
-                logger.error(f"Seed failed: {r.status_code} {r.text}")
-            else:
-                logger.info(f"Seed ok for provider_call_id={provider_call_id}")
+            await rc.post(
+                f"{BACKEND_BASE}/api/v1/pipecat/event",
+                json={"provider_call_id": provider_call_id, "event_type": event_type, "data": data},
+            )
+        logger.info(f"📡 Event '{event_type}' sent")
     except Exception as e:
-        logger.exception(f"Seed call failed: {e}")
+        logger.warning(f"Event post failed: {e}")
+
 
 async def _finalize(provider_call_id: str | None, transcript: str | None, started_at: dt.datetime | None):
     if not provider_call_id:
         logger.warning("No provider_call_id; skipping finalize POST.")
         return
 
-    dur = 0.0
+    duration = 0.0
     if started_at:
-        dur = max(0.0, (_utcnow() - started_at).total_seconds())
+        duration = max(0.0, (_utcnow() - started_at).total_seconds())
+
+    analytics = _analytics_from_transcript(transcript or "")
+    analytics["duration_secs"] = round(duration, 2)
 
     payload = {
         "provider_call_id": provider_call_id,
-        "transcript": (transcript or None),
-        "extra": {"duration_secs": round(dur, 2)},
+        "transcript": transcript,
+        "extra": analytics,
     }
+
     try:
-        async with httpx.AsyncClient(timeout=15.0) as rc:
+        async with httpx.AsyncClient(timeout=20.0) as rc:
             r = await rc.post(f"{BACKEND_BASE}/api/v1/pipecat/finalize", json=payload)
-            if r.status_code >= 400:
-                logger.error(f"Finalize failed: {r.status_code} {r.text}")
+            if r.status_code < 400:
+                logger.info("✅ Finalized transcript + analytics to backend.")
             else:
-                logger.info("✅ Finalized transcript to backend.")
+                logger.error(f"Finalize failed: {r.status_code} {r.text}")
     except Exception as e:
         logger.exception(f"Finalize call failed: {e}")
-
-def _find_conv_in_obj(obj, depth=2):
-    """
-    Heuristically search attributes likely holding query/params dicts for 'conv'.
-    Works with SmallWebRTCConnection internals and runner args.
-    """
-    if depth < 0 or obj is None:
-        return None
-
-    if isinstance(obj, dict):
-        if "conv" in obj and isinstance(obj["conv"], (str, int)):
-            return str(obj["conv"])
-        # scan nested dicts
-        for _, v in list(obj.items())[:20]:
-            if isinstance(v, dict):
-                hit = _find_conv_in_obj(v, depth - 1)
-                if hit:
-                    return hit
-        return None
-
-    try:
-        for name in dir(obj):
-            lname = name.lower()
-            if ("query" in lname or "param" in lname or "args" in lname) and not lname.startswith("__"):
-                try:
-                    v = getattr(obj, name)
-                except Exception:
-                    continue
-                if isinstance(v, dict):
-                    hit = _find_conv_in_obj(v, depth - 1)
-                    if hit:
-                        return hit
-    except Exception:
-        pass
-    return None
-
-def _extract_conv_id(transport: BaseTransport, client, runner_args: RunnerArguments) -> str | None:
-    
-    hit = _find_conv_in_obj(client, depth=3)
-    if hit:
-        return hit
-    
-    for attr in ("connection", "_connection"):
-        c = getattr(transport, attr, None)
-        hit = _find_conv_in_obj(c, depth=3)
-        if hit:
-            return hit
-    
-    for attr in ("connection_query", "connection_params", "client_params"):
-        qp = getattr(runner_args, attr, None)
-        hit = _find_conv_in_obj(qp, depth=3)
-        if hit:
-            return hit
-    
-    return os.getenv("PIPECAT_CONV")
 
 
 
@@ -220,10 +141,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     tts = CartesiaTTSService(api_key=CARTESIA_API_KEY, voice_id=CARTESIA_VOICE_ID)
     llm = OpenAILLMService(api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
 
-    
-    context = LLMContext([{"role": "system", "content": SYSTEM_PROMPT}])
+    base_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    context = LLMContext(base_messages)
     agg = LLMContextAggregatorPair(context)
-
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
     pipeline = Pipeline([
@@ -237,43 +157,37 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         agg.assistant(),
     ])
 
-    
-    whisker = WhiskerObserver(pipeline)
+    observers = [RTVIObserver(rtvi)]
+    if WhiskerObserver:
+        observers.append(WhiskerObserver(pipeline))
 
     task = PipelineTask(
         pipeline,
         params=PipelineParams(enable_metrics=True, enable_usage_metrics=True),
-        observers=[RTVIObserver(rtvi), whisker],
+        observers=observers,
     )
 
     state = {"started_at": None, "provider_call_id": None}
 
     @transport.event_handler("on_client_connected")
     async def _on_client_connected(t, client):
+        from random import randint
         state["started_at"] = _utcnow()
+        state["provider_call_id"] = f"pipecat_{randint(1000000,9999999)}"
+        logger.info(f"Client connected. provider_call_id={state['provider_call_id']}")
 
-        
-        conv_from_client = _extract_conv_id(transport, client, runner_args)
-        provider_call_id = conv_from_client or f"pipecat_{int(time.time() * 1000)}"
-        if not conv_from_client:
-            logger.warning(f"No ?conv= found in client; generated provider_call_id={provider_call_id}")
+    
+        await _post_event(state["provider_call_id"], "call_started", {"time": str(_utcnow())})
 
-        state["provider_call_id"] = provider_call_id
-
-        
-        await _seed_calllog_if_needed(provider_call_id)
-
-        logger.info(f"Client connected. provider_call_id={provider_call_id}")
-
-        
         await task.queue_frames([LLMRunFrame()])
 
     @transport.event_handler("on_client_disconnected")
     async def _on_client_disconnected(t, client):
         logger.info("Client disconnected")
         try:
-            msgs = _get_context_messages(context)
-            transcript_text = _format_transcript(msgs)
+            messages = context.to_universal_messages() if hasattr(context, "to_universal_messages") else []
+            transcript_text = _format_transcript(messages)
+            await _post_event(state["provider_call_id"], "call_ended", {"duration_est": 0})
             await _finalize(state["provider_call_id"], transcript_text, state["started_at"])
         finally:
             await task.cancel()
@@ -283,7 +197,6 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
 
 async def bot(runner_args: RunnerArguments):
-    
     transport_params = {
         "webrtc": lambda: TransportParams(
             audio_in_enabled=True,
