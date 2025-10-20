@@ -12,11 +12,11 @@ async def list_results(load_number: str | None = Query(None), limit: int = 50):
 
         r = await c.get("/calllog", params=params)
         if r.status_code >= 400:
-            # Try alternate ordering
+            
             params["order"] = "id.desc"
             r = await c.get("/calllog", params=params)
             if r.status_code >= 400:
-                # Last resort: no order
+                
                 params.pop("order", None)
                 r = await c.get("/calllog", params=params)
 

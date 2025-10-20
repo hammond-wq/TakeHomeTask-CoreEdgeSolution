@@ -22,9 +22,8 @@ const linkActive = "bg-white/15 ring-1 ring-white/20";
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen bg-brand text-white transition-all duration-300 ${
-        collapsed ? "w-20" : "w-64"
-      }`}
+      className={`fixed left-0 top-0 h-screen bg-brand text-white transition-all duration-300 ${collapsed ? "w-20" : "w-64"
+        }`}
     >
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="font-extrabold tracking-tight">
@@ -90,6 +89,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           <FaChartLine />
           {!collapsed && <span>Analytics</span>}
         </NavLink>
+
+        <NavLink
+          to="/pipecat"
+          className={({ isActive }) => `${linkBase} ${isActive ? linkActive : ""}`}
+        >
+          <FaPhoneAlt />
+          {!collapsed && <span>Pipecat Call</span>}
+        </NavLink>
+
       </nav>
 
       {!collapsed && (

@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { listConversations, exportConversationsCSV, Conversation } from "../services/api";
 
 const statuses = ["Driving", "Delayed", "Arrived", "Unloading"] as const;
-type Status = typeof statuses[number]; // "Driving" | "Delayed" | "Arrived" | "Unloading"
+type Status = typeof statuses[number]; 
 
 const ConversationsPage: React.FC = () => {
   const [q, setQ] = useState("");
   const [driver, setDriver] = useState("");
   const [loadNumber, setLoadNumber] = useState("");
-  const [status, setStatus] = useState<Status | "">(""); // <- union w/ empty string for "Any"
+  const [status, setStatus] = useState<Status | "">(""); 
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
 
@@ -28,7 +28,7 @@ const ConversationsPage: React.FC = () => {
         q: q.trim() || undefined,
         driver_name: driver.trim() || undefined,
         load_number: loadNumber.trim() || undefined,
-        // cast to the exact union type the API expects
+        
         status: (status || undefined) as Status | undefined,
         date_from: from || undefined,
         date_to: to || undefined,
@@ -46,7 +46,7 @@ const ConversationsPage: React.FC = () => {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [page, limit]);
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
@@ -58,7 +58,7 @@ const ConversationsPage: React.FC = () => {
         <p className="text-sm text-gray-500">Search, filter and export call transcripts.</p>
       </div>
 
-      {/* Filters */}
+     
       <div className="panel p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
         <input
           className="input"
@@ -188,7 +188,7 @@ const ConversationsPage: React.FC = () => {
         </table>
       </div>
 
-      {/* Pagination */}
+   
       <div className="flex items-center gap-2">
         <button className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
           Prev
