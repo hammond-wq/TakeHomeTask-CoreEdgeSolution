@@ -24,13 +24,13 @@ from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 
-
 try:
-    from pipecat_whisker import WhiskerObserver 
+    from pipecat_whisker import WhiskerObserver
 except Exception:
     WhiskerObserver = None
 
 
+# ENV & CONFIG
 load_dotenv(override=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -49,6 +49,7 @@ KEYWORDS = [k.strip().lower() for k in os.getenv("PIPECAT_KEYWORDS", ",".join(KW
 
 
 
+# Utility Helpers
 def _utcnow():
     return dt.datetime.now(dt.timezone.utc)
 
@@ -67,7 +68,7 @@ def _format_transcript(messages):
 
 def _analytics_from_transcript(transcript: str) -> dict:
     low = (transcript or "").lower()
-    kw_hits = {kw: len(re.findall(rf"\b{re.escape(kw)}\b", low)) for kw in KEYWORDS}
+    kw_hits = {kw: len(re.findall(rf"\\b{re.escape(kw)}\\b", low)) for kw in KEYWORDS}
     lines = [ln.strip() for ln in (transcript or "").splitlines() if ln.strip()]
     driver_turns = agent_turns = interruptions_est = 0
     prev = None
@@ -90,21 +91,22 @@ def _analytics_from_transcript(transcript: str) -> dict:
     }
 
 
-async def _post_event(provider_call_id, event_type, data):
-    if not provider_call_id:
-        return
+async def _post_rtvi_event(call_id, event, data):
+    """Send real-time RTVI events to backend analytics."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as rc:
-            await rc.post(
-                f"{BACKEND_BASE}/api/v1/pipecat/event",
-                json={"provider_call_id": provider_call_id, "event_type": event_type, "data": data},
-            )
-        logger.info(f"📡 Event '{event_type}' sent")
+        async with httpx.AsyncClient(timeout=8.0) as rc:
+            await rc.post(f"{BACKEND_BASE}/api/v1/pipecat/rtvi", json={
+                "provider_call_id": call_id,
+                "event": event,
+                **data
+            })
+        logger.info(f"RTVI event sent: {event}")
     except Exception as e:
-        logger.warning(f"Event post failed: {e}")
+        logger.warning(f"RTVI event post failed: {e}")
 
 
 async def _finalize(provider_call_id: str | None, transcript: str | None, started_at: dt.datetime | None):
+    """Finalize transcript and send analytics summary."""
     if not provider_call_id:
         logger.warning("No provider_call_id; skipping finalize POST.")
         return
@@ -126,16 +128,15 @@ async def _finalize(provider_call_id: str | None, transcript: str | None, starte
         async with httpx.AsyncClient(timeout=20.0) as rc:
             r = await rc.post(f"{BACKEND_BASE}/api/v1/pipecat/finalize", json=payload)
             if r.status_code < 400:
-                logger.info("✅ Finalized transcript + analytics to backend.")
+                logger.info("Finalized transcript + analytics to backend.")
             else:
                 logger.error(f"Finalize failed: {r.status_code} {r.text}")
     except Exception as e:
         logger.exception(f"Finalize call failed: {e}")
 
 
-
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
-    logger.info("Starting bot: Deepgram STT + OpenAI LLM + Cartesia TTS")
+    logger.info("Starting bot with Deepgram STT + OpenAI LLM + Cartesia TTS")
 
     stt = DeepgramSTTService(api_key=DEEPGRAM_API_KEY)
     tts = CartesiaTTSService(api_key=CARTESIA_API_KEY, voice_id=CARTESIA_VOICE_ID)
@@ -144,7 +145,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     base_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     context = LLMContext(base_messages)
     agg = LLMContextAggregatorPair(context)
+
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+    observers = [RTVIObserver(rtvi)]
+    if WhiskerObserver:
+        observers.append(WhiskerObserver(rtvi))
 
     pipeline = Pipeline([
         transport.input(),
@@ -156,10 +161,6 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         transport.output(),
         agg.assistant(),
     ])
-
-    observers = [RTVIObserver(rtvi)]
-    if WhiskerObserver:
-        observers.append(WhiskerObserver(pipeline))
 
     task = PipelineTask(
         pipeline,
@@ -173,12 +174,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     async def _on_client_connected(t, client):
         from random import randint
         state["started_at"] = _utcnow()
-        state["provider_call_id"] = f"pipecat_{randint(1000000,9999999)}"
+        state["provider_call_id"] = f"pipecat_{randint(1000000, 9999999)}"
         logger.info(f"Client connected. provider_call_id={state['provider_call_id']}")
-
-    
-        await _post_event(state["provider_call_id"], "call_started", {"time": str(_utcnow())})
-
+        await _post_rtvi_event(state["provider_call_id"], "call_started", {"time": str(_utcnow())})
         await task.queue_frames([LLMRunFrame()])
 
     @transport.event_handler("on_client_disconnected")
@@ -187,10 +185,36 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         try:
             messages = context.to_universal_messages() if hasattr(context, "to_universal_messages") else []
             transcript_text = _format_transcript(messages)
-            await _post_event(state["provider_call_id"], "call_ended", {"duration_est": 0})
+            await _post_rtvi_event(state["provider_call_id"], "transcript_final", {"transcript": transcript_text})
             await _finalize(state["provider_call_id"], transcript_text, state["started_at"])
         finally:
             await task.cancel()
+
+    # -------------------------------------------------------------------------
+    # RTVI live event hooks
+    # -------------------------------------------------------------------------
+    @rtvi.event_handler("interrupt_detected")
+    async def _on_interrupt(event):
+        await _post_rtvi_event(state["provider_call_id"], "interrupt_detected", {"at": str(_utcnow())})
+
+    @rtvi.event_handler("sentiment_update")
+    async def _on_sentiment(event):
+        await _post_rtvi_event(state["provider_call_id"], "sentiment_update", {"sentiment": event.get("sentiment")})
+
+    @rtvi.event_handler("keyword_detected")
+    async def _on_keyword(event):
+        kw = event.get("keyword")
+        await _post_rtvi_event(state["provider_call_id"], "keyword_detected", {"keyword": kw})
+
+    @rtvi.event_handler("metrics_final")
+    async def _on_metrics(event):
+        await _post_rtvi_event(state["provider_call_id"], "metrics_final", {
+            "metrics": {
+                "duration_secs": event.get("duration_secs"),
+                "tokens_used": event.get("tokens_used"),
+                "sentiment_final": event.get("sentiment", "neutral")
+            }
+        })
 
     runner = PipelineRunner(handle_sigint=runner_args.handle_sigint)
     await runner.run(task)
