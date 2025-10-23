@@ -19,6 +19,16 @@ from app.middleware.error_handler import http_error_handler
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.request_timing import RequestTimingMiddleware
 
+from app.api.v1.routers.pipecat_adapter import router as pipecat_router
+from app.api.v1.routers.voice_start import router as voice_router
+from app.api.v1.routers.pipecat_events import router as pipecat_events_router
+from app.api.v1.routers.analytics_pipecat import router as analytics_pipecat
+
+from app.api.v1.routers.pipecat_metrics import router as pipecat_metrics
+
+
+
+
 setup_logging()
 app = FastAPI(title=settings.app_name)
 
@@ -40,6 +50,11 @@ app.include_router(agents_router)
 app.include_router(dev_router)
 app.include_router(metrics.router)
 app.include_router(conversations.router)
+app.include_router(pipecat_router)
+app.include_router(voice_router)
+app.include_router(pipecat_events_router)
+app.include_router(analytics_pipecat)
+app.include_router(pipecat_metrics)
 
 @app.exception_handler(StarletteHTTPException)
 async def _http_exc_handler(request: Request, exc: StarletteHTTPException):

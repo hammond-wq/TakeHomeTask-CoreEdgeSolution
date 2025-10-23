@@ -29,6 +29,7 @@ const ConversationsPage: React.FC = () => {
         q: q.trim() || undefined,
         driver_name: driver.trim() || undefined,
         load_number: loadNumber.trim() || undefined,
+
         status: (status || undefined) as Status | undefined,
         date_from: from || undefined,
         date_to: to || undefined,
@@ -44,7 +45,10 @@ const ConversationsPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [page, limit]);
+  useEffect(() => {
+    load();
+
+  }, [page, limit]);
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 
@@ -62,7 +66,7 @@ const ConversationsPage: React.FC = () => {
         <p className="text-sm text-gray-500">Search, filter and export call transcripts.</p>
       </div>
 
-      {/* Filters */}
+
       <div className="panel p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
         <input className="input" placeholder="Search transcript…" value={q} onChange={(e) => setQ(e.target.value)} />
         <input className="input" placeholder="Driver name…" value={driver} onChange={(e) => setDriver(e.target.value)} />
@@ -79,7 +83,23 @@ const ConversationsPage: React.FC = () => {
             Reset
           </button>
           <div className="flex-1" />
-          <button className="btn" onClick={exportCsv}>Export CSV</button>
+          <button
+            className="btn"
+            onClick={() =>
+              exportConversationsCSV({
+                q,
+                driver_name: driver,
+                load_number: loadNumber,
+                status: status === "" ? undefined : status,
+                date_from: from,
+                date_to: to,
+                limit: 5000,
+              })
+
+            }
+          >
+            Export CSV
+          </button>
         </div>
       </div>
 
@@ -128,7 +148,7 @@ const ConversationsPage: React.FC = () => {
         </table>
       </div>
 
-      {/* Pagination */}
+
       <div className="flex items-center gap-2">
         <button className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
         <div className="text-sm text-gray-500">Page {page} / {pages} (Total {total})</div>

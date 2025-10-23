@@ -1,3 +1,4 @@
-./myenv
+# Ignore virtual environments
+myenv/
+backend/myenv/
 .env
-.env.example

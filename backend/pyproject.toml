@@ -13,7 +13,8 @@ dependencies = [
   "structlog",
   "python-json-logger",
   "tenacity",
-  "orjson"
+  "orjson",
+  "pipecat-ai[webrtc,openai,deepgram,cartesia]>=0.1.0"
 ]
 
 [tool.ruff]

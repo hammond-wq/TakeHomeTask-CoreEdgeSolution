@@ -9,7 +9,8 @@ import AgentConfigPage from "./assets/pages/AgentConfigPage";
 import CallTriggerPage from "./assets/pages/CallTriggerPage";
 import AnalyticsPage from "./assets/pages/AnalyticsPage";
 import ConversationsPage from "./assets/pages/ConversationsPage";
-import ResultsPage from "./assets/pages/ResultsPage";
+import PipecatCallPanel from "./assets/components/PipecatCall/PipecatCallPanel";
+
 
 const AppRoutes = () => (
   <Router>
@@ -23,6 +24,7 @@ const AppRoutes = () => (
         <Route path="/conversations" element={<ConversationsPage />} />
         <Route path="/results" element={<ResultsPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/pipecat" element={<PipecatCallPanel />} />
       </Route>
     </Routes>
   </Router>
